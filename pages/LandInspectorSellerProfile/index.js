@@ -5,6 +5,7 @@ import { useContractRead } from "wagmi";
 import { ContractAddress } from "../../constants/ContractAddress";
 import { abi } from "../../constants/ABIcontract";
 import { prepareWriteContract, writeContract } from "@wagmi/core";
+import { shortenAddress } from "../../utils";
 
 const SellerProfile = () => {
   const [mounted, setMounted] = useState(false);
@@ -64,7 +65,7 @@ const SellerProfile = () => {
 
   return (
     <Layout>
-      <table className="table-auto">
+      <table className="table-auto w-full">
         <thead className="">
           <tr className="text-left">
             <th>Account Address</th>
@@ -83,7 +84,7 @@ const SellerProfile = () => {
             {mounted && (
               <>
                 {" "}
-                <td>{data.data?.[0]}</td>
+                <td>{shortenAddress(data.data?.[0])}</td>
                 <td>{data1?.[0]}</td>
                 <td>{Number(data1?.[1])}</td>
                 <td>{data1?.[2]}</td>

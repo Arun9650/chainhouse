@@ -103,7 +103,6 @@ const LandInfoTable = () => {
     abi: abi,
   });
 
-  console.log(sellerId.data[0]);
 
   const requestLand = async (index) => {
     console.log("🚀 ~ requestLand ~ index:", index)
