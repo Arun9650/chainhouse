@@ -110,12 +110,6 @@ const RegisterSeller = () => {
   }) => {
 
 
-    console.log("username",typeof username)
-    console.log('age', typeof age);
-    console.log('acn',typeof aadharCardNo)
-    console.log('pcn',typeof panCardNo)
-    console.log('land',typeof ownedLands)
-    console.log('image',typeof aadharCardImage)
 
    try {
     const { request } = await prepareWriteContract({

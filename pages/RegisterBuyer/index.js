@@ -6,23 +6,76 @@ import {
   usePrepareContractWrite,
   useWalletClient,
 } from "wagmi";
+import {
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from "/components/components/ui/form.jsx";
 import { abi } from "../../constants/ABIcontract";
 import RegisterToBlockchain from "../../components/SellerRegisterBlockchain";
 import { ContractAddress } from "../../constants/ContractAddress";
 import Layout from "../../components/layout";
 import Header from "../../components/Header";
 import BuyerRegisterBlockchain from "../../components/BuyerRegisterBlockchain";
+import {waitForTransaction, prepareWriteContract , writeContract} from '@wagmi/core'
+import { Form } from "../../components/components/ui/form";
+import { Input } from "/components/components/ui/input.jsx";
+import { Button } from "../../components/components/ui/button";
+import * as z from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import toast from "react-hot-toast";
+
+const formSchema = z.object({
+  username: z.string().min(2, {
+    message: "Username must be at least 2 characters.",
+  }),
+  age: z.number().positive({
+    message: "Age must be a positive number.",
+  }),
+  aadharCardNo: z.string().min(12, {
+    message: "Aadhar Card No. must be at least 12 characters.",
+  }),
+  panCardNo: z.string().min(10, {
+    message: "Pan Card No. must be at least 10 characters.",
+  }),
+  ownedLands: z.string(),
+  aadharCardImage: z.string(),
+  email: z.string().email({
+    message: "Please enter a valid email address.",
+  }),
+
+});
+
 
 const Index = () => {
+
+  const [uploading, setUploading] = useState(false);
+  const router = useRouter();
+  const {address} = useAccount();
+
+  const form = useForm({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      username: "",
+      age: "", // Provide appropriate default values for other fields
+      aadharCardNo: "",
+      panCardNo: "",
+      ownedLands: "1",
+      aadharCardImage: "",
+      email: "",
+    },
+  });
+
+
   const [file, setFile] = useState("");
   const [cid, setCid] = useState("");
-  const [uploading, setUploading] = useState(false);
 
-  const router = useRouter();
 
   const [mounted, setMounted] = useState(false);
 
-  const { address, isConnected } = useAccount();
 
   const [SellerData, setSellerData] = useState({
     name: "",
@@ -32,6 +85,7 @@ const Index = () => {
     AadharCardNo: "",
     PanNo: "",
     AadharCardImage: "" || cid,
+    email: "",
   });
 
   const uploadFile = async (fileToUpload) => {
@@ -64,158 +118,270 @@ const Index = () => {
     setSellerData({ ...SellerData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+
+  const {data: BuyerData} = useContractRead({
+    address: ContractAddress,
+    abi: abi,
+    functionName: 'getBuyer',
+    // args: [address],
+  })
+
+
+  console.log("🚀 ~ Index ~ BuyerData:", BuyerData)
+  
+  function isAddressInBuyerData(address, buyerData) {
+    // Check if buyerData is not null or undefined
+    if (buyerData) {
+      // Check if the address exists in buyerData
+      return buyerData.some(buyer => buyer.address === address);
+    }
+    // If buyerData is null or undefined, return false
+    return false;
+  }
+
+  const onSubmit = async ({
+    username,
+    age,
+    aadharCardNo,
+    panCardNo,
+    ownedLands,
+    aadharCardImage,
+    email
+  }) => {
+
+   
+    if(BuyerData){
+      isAddressInBuyerData(address, BuyerData);
+
+      toast.error('User already registered');
+      router.push('/Dashboard');
+      return;
+    }
+
+
 
     console.log("handleSubmit1");
-    if (
-      SellerData.name &&
-      SellerData.age &&
-      SellerData.AadharCardNo &&
-      SellerData.PanNo &&
-      SellerData.email &&
-      cid
-    ) {
+     
       try {
-        const hash = BuyerRegisterBlockchain(SellerData);
+        const { request } = await prepareWriteContract({
+          address: ContractAddress,
+          abi: abi,
+          functionName: "registerBuyer",
+          args: [
+            username,
+            age,
+            aadharCardNo,
+            panCardNo,
+            ownedLands,
+            aadharCardImage,
+            email,
+          ],
+        });
 
-        if (hash) {
+        const {hash} = await writeContract(request);
+
+        const txWait = await waitForTransaction({
+          hash: hash,
+        });
+     
+        const result = await toast.promise(txWait, {
+          loading: "Waiting for transaction to complete",
+          success: "Transaction completed successfully",
+          error: "Transaction failed",
+        });
+    
+        
+
+        if (result.status == 'success') {
           router.push("/Dashboard");
         }
       } catch (e) {
         console.log(e);
-      }
-      console.log("handleSubmit3");
-    }
+        toast.error('Something went wrong');
+      }    
   };
 
-  const getBuyersCount = useContractRead({
+  const { data: getBuyer} = useContractRead({
     address: ContractAddress,
-    functionName: "isBuyer",
+    functionName: "getBuyer",
     abi: abi,
     args: [address],
   });
 
-  console.log("address", address);
-  console.log("getSellerCount", getBuyersCount);
+
 
   useEffect(() => {
-    setMounted(true);
-    if (getBuyersCount.data > 0) {
-      router.push("/Dashboard");
+    if (getBuyer) {
+      if(getBuyer.address == address){
+        router.push("/Dashboard");
+      }
     }
-
-    return () => null
-  }, [getBuyersCount.data, router]);
+  }, [getBuyer]);
 
   return (
-    <div>
+    <div className="min-h-screen flex flex-col h-screen ">
       <Header />
-      <div className="flex flex-col items-center justify-center min-h-screen p-24">
-        <div className="border p-2 rounded-lg bg-gray-50 text-start w-5/12 px-10">
-          <h1 className="text-2xl font-semibold font-serif">
-            {" "}
-            Buyer Registration
-          </h1>
-          <form action="" onSubmit={handleSubmit}>
-            <div className="flex flex-col my-2">
-              <label htmlFor="name">Enter Name</label>
-              <input
-                type="text"
-                name="name"
-                id="name"
-                value={SellerData.name}
-                onChange={handleChange}
-                required
-                className=" my-1 shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              />
-            </div>
 
-            <div>
-              <label htmlFor="age">Enter Age</label>
-              <input
-                type="number"
-                name="age"
-                value={SellerData.age}
-                onChange={handleChange}
-                id="age"
-                required
-                className=" my-1 shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              />
-            </div>
-            <div>
-              <label htmlFor="city">Enter City</label>
-              <input
-                type="text"
-                name="city"
-                value={SellerData.city}
-                onChange={handleChange}
-                id="city"
-                required
-                className=" my-1 shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              />
-            </div>
+      <section className="bg-white flex flex-grow h-full   dark:bg-gray-900 ">
+        <div className=" flex-grow h-full">
+          <div className="flex justify-center   flex-grow h-full    ">
+            <div className="hidden bg-cover lg:block lg:w-2/5 bg-[url(/register-image.png)] "></div>
 
-            <div>
-              <label htmlFor="AadharCardNo">Enter AdharCard No.</label>
-              <input
-                type="text"
-                value={SellerData.AadharCardNo}
-                onChange={handleChange}
-                required
-                name="AadharCardNo"
-                className=" my-1 shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              />
-            </div>
-            <div>
-              <label htmlFor="PanNo">Enter Pan No</label>
-              <input
-                type="text"
-                name="PanNo"
-                value={SellerData.PanNo}
-                onChange={handleChange}
-                required
-                className=" my-1 shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              />
-            </div>
+            <div className="flex items-center w-full max-w-3xl pt-0 p-8 mx-auto lg:px-12 lg:w-3/5">
+              <div className="w-full">
+                <h1 className="text-2xl font-semibold tracking-wider text-gray-800 capitalize dark:text-white">
+                  Get your free account now.
+                </h1>
 
-            <div className="my-2">
-              <label htmlFor="AadharCardImage" className="my-1">
-                Add your Aadhar card (Pdf format)
-              </label>
-              <input
-                type="file"
-                onChange={handleChangeFile}
-                accept="application/pdf"
-                name="AadharCardImage"
-                required
-              />
-            </div>
+                <p className="mt-4 text-gray-500 dark:text-gray-400">
+                  Let’s get you all set up so you can verify your personal
+                  account and begin setting up your profile.
+                </p>
 
-            <div>
-              <label htmlFor="email">Enter Email</label>
-              <input
-                type="email"
-                name="email"
-                value={SellerData.email}
-                onChange={handleChange}
-                required
-                className=" my-1 shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              />
-            </div>
+                <Form {...form}>
+                  <form
+                    onSubmit={form.handleSubmit(onSubmit)}
+                    className=" grid grid-cols-1 gap-6 mt-8 md:grid-cols-2"
+                  >
+                    <FormField
+                      control={form.control}
+                      name="username"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Username</FormLabel>
+                          <FormControl>
+                            <Input placeholder="shadcn" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="age"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Age</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="18"
+                              {...field}
+                              onChange={(e) => {
+                                const value = e.target.value
+                                  ? parseInt(e.target.value)
+                                  : undefined;
+                                if (!isNaN(value) || value === undefined) {
+                                  field.onChange(value);
+                                }
+                              }}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="aadharCardNo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Aadhar Card No.</FormLabel>
+                          <FormControl>
+                            <Input placeholder="XXXX XXXX XXXX" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="panCardNo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Pan Card No.</FormLabel>
+                          <FormControl>
+                            <Input placeholder="XXXXX0000X " {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="ownedLands"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>owned Land</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="text"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="">
+                      <FormField
+                        control={form.control}
+                        name="aadharCardImage"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>AadharCardImage</FormLabel>
+                            <FormControl>
+                              <input
+                                type="file"
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                onChange={handleChangeFile}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {uploading && (
+                        <span className="pl-2 text-yellow-500">
+                          {" "}
+                          Please wait file is uploading...{" "}
+                        </span>
+                      )}
+                    </div>
 
-            <button
-              className="button border  my-2 rounded-lg w-full disabled:bg-gray-400 p-3 bg-blue-400 text-white"
-              onClick={(e) => handleSubmit(e)}
-            >
-              Register
-            </button>
-            {cid && (
-              <p className="text-green-500">File uploaded successfully</p>
-            )}
-          </form>
+                        <div>
+                        <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>email</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="email"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                        </div>
+
+                    <Button
+                      disabled={uploading}
+                      type="submit"
+                      className="col-span-full"
+                    >
+                      Submit
+                    </Button>
+                  </form>
+                </Form>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 };

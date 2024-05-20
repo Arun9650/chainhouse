@@ -60,14 +60,6 @@ const AddLand = () => {
   }
 
 
-
-
-
-
-
-
-
-
   const handleChangeFile = (e) => {
    
     uploadFile(e.target.files[0],e.target.name);
@@ -92,11 +84,8 @@ const AddLand = () => {
         args: [Number(landData.area), landData.city, landData.state, Number(landData.price), Number(landData.propertyPID), Number(landData.physicalSurveyNo), landData.landImage, landData.adharCardImage],
       })
 
-      console.log(request);
 
       const {hash} = await writeContract(request);
-      console.log(hash);
-      // return hash;
     }
    } catch (error) {
       console.log(error) 
