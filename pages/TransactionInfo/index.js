@@ -1,11 +1,16 @@
-import React from 'react'
+import React, {useEffect, useState} from 'react'
 import Layout from '../../components/LayoutLandInspector'
-import { useContractRead } from 'wagmi'
+import { useAccount, useContractRead } from 'wagmi'
 import { ContractAddress } from '../../constants/ContractAddress'
 import { abi } from '../../constants/ABIcontract'
-import {prepareWriteContract, writeContract} from '@wagmi/core'
+import {prepareWriteContract, writeContract, readContract, waitForTransaction} from '@wagmi/core'
+import { shortenAddress } from '../../utils'
+import toast from 'react-hot-toast'
 
 const TransactionInfo = () => {
+
+    const [landsData, setLandsData] = useState([]);
+    console.log("🚀 ~ TransactionInfo ~ landsData:", landsData)
 
     const LandOwner = useContractRead({
         address: ContractAddress,
@@ -61,31 +66,122 @@ const TransactionInfo = () => {
         functionName: "getBuyer",
     })
 
-    const data = useContractRead({
-        address: ContractAddress,
-        abi: abi,
-        functionName: "getRequestDetails",
-        args: [1],
-    })
+    const {address} = useAccount();
+
+    console.log(address);
+
+    // const data = useContractRead({
+    console.log("🚀 ~ TransactionInfo ~ buyerId:", buyerId)
+    //     address: ContractAddress,
+    //     abi: abi,
+    //     functionName: "getRequestDetails",
+    //     args: [1],
+    // })
 
     const Ispaid = useContractRead({
         address: ContractAddress,
         abi: abi,
-        functionName: "isPaid",
-        args: [1],
+        functionName: "checkPaymentReceived",
+        args: [4],
     })
 
-    const verify = async () => {
-        const {request} = await prepareWriteContract({
-            address: ContractAddress,
-            abi: abi,
-            functionName: "LandOwnershipTransfer",
-            args: [1, buyerId.data[0]],
-        })
+    const data = useContractRead({
+        address: ContractAddress,
+        abi: abi,
+        functionName: "getLandCount",
+    });
+    console.log("🚀 ~ TransactionInfo ~ LandCount:", data)
 
-        const {hash} = await writeContract(request);
+    const verify = async (landId, buyerAddress) => {
+        try {
+            const {request} = await prepareWriteContract({
+                address: ContractAddress,
+                abi: abi,
+                functionName: "transferLandOwnership",
+                args: [landId, buyerAddress],
+            })
+    
+            const {hash} = await writeContract(request);
+            const txhash = waitForTransaction({ hash: hash });
+
+            toast.promise(txhash, {
+                loading: "Verifying transaction...",
+                success: "Transaction completed successfully",
+                error: "Transaction failed",
+            })
+        } catch (error) {
+            console.log(error);
+            toast.error(error.shortMessage);
+            
+        }
     }
 
+    
+    useEffect(() => {
+        if (data.data) {
+          const arrayLength = Number(data.data);
+          const dynamicArray = Array.from({ length: arrayLength }, (v, i) => i + 1);
+    
+          const fetchLandInfo = async () => {
+            const landPromises = dynamicArray.map((index) =>
+              readContract({
+                address: ContractAddress,
+                abi: abi,
+                functionName: "lands",
+                args: [index],
+              })
+            );
+    
+            const landsData = await Promise.all(landPromises);
+            console.log("🚀 ~ fetchLandInfo ~ landsData:", landsData)
+      
+    
+    
+            const isLandRequested = dynamicArray.map((index) => 
+              readContract({
+                address: ContractAddress,
+                abi: abi,
+                functionName: "isLandRequestedMapping",
+                args: [index],
+              })
+      
+            )
+    
+            
+            const isLandRequestedArray = await Promise.all(isLandRequested);
+
+
+            const Owner = dynamicArray.map((index) => 
+              readContract({
+                address: ContractAddress,
+                abi: abi,
+                functionName: "landOwner",
+                args: [index],
+              })
+      
+            )
+    
+            
+            const OwnerArray = await Promise.all(Owner);
+            console.log("🚀 ~ fetchLandInfo ~ OwnerArray:", OwnerArray)
+            
+            console.log(landsData)
+            console.log(isLandRequestedArray)
+    
+            const combinedData = landsData.map((item, index) => {
+              return {...item, isRequested: isLandRequestedArray[index], Owner: OwnerArray[index]};
+            });
+            
+            console.log(combinedData);
+    
+            setLandsData(combinedData);
+          };
+    
+          fetchLandInfo();
+        }
+      }, [data.data]);
+
+    
   return (
     <Layout>
         <div>
@@ -107,24 +203,30 @@ const TransactionInfo = () => {
                     </tr>
                 </thead>
                 <tbody>
-                    <td>1</td>
-                    <td>{(LandOwner?.data)?.toString()}</td>
-                    <td>{(Area?.data)?.toString()}</td>
-                    <td>{(City?.data)?.toString()}</td>
-                    <td>{(State?.data)?.toString()}</td>
-                    <td>{(Price?.data)?.toString()}</td>
-                    <td>{(PID?.data)?.toString()}</td>
-                    <td>{(SurveyNumber?.data)?.toString()}</td>
-                    <td><button onClick={() => verify()} className='bg-blue-600 text-white p-4 rounded-lg'>Verify Transaction</button></td>
+                   {
+                       landsData.filter(land => land.isRequested)?.map((item, index) => (
+                            <tr key={index}>
+                           <td>{(Number(item[0]))?.toString()}</td>
+                    <td>{(shortenAddress(item.Owner))?.toString()}</td>
+                    <td>{(item[1])?.toString()}</td>
+                    <td>{(item[2])?.toString()}</td>
+                    <td>{(item[3])?.toString()}</td>
+                    <td>{(Number(item[4]))?.toString()}</td>
+                    <td>{(Number(item[5]))?.toString()}</td>
+                    <td>{(Number(item[6]))?.toString()}</td>
+                    <td><button onClick={() => verify(Number(item[0]), address)} className='bg-blue-600 text-white p-4 rounded-lg'>Verify Transaction</button></td>
+                    </tr>
+                    ))
+                   }
                 </tbody>
             </table>
 
-            <div>
-                <h1>Buyer : {data?.data?.[1]}</h1>
+            {/* <div>
+                <h1>Buyer : {buyerId[0]}</h1>
                 <h1>Seller : {data?.data?.[0]}</h1>
                 <h1>Land Id : {(data?.data?.[2])?.toString()}</h1>
                 <h1>Paid : {(Ispaid?.data)?.toString()}</h1>
-            </div>
+            </div> */}
 
         </div>
     </Layout>

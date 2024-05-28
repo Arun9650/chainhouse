@@ -6,8 +6,6 @@ import {watchAccount} from '@wagmi/core';
 const Header = () => {
 
   
-  
-
   return (
     <div className="w-full   px-4 py-5 mx-auto md:px-24 lg:px-8 bg-gray-200">
         <div className="relative flex items-center justify-between max-w-6xl mx-auto">
@@ -18,10 +16,10 @@ const Header = () => {
               title="Company"
               className="inline-flex items-center mr-8"
             >
-            <Image src="/logo.svg" className='' width={100} height={100} alt="logo"/>
+            <Image src="/logo-cropped.svg" className='' width={50} height={50} alt="logo"/>
           {" "}
               <span className="ml-2 text-xl font-bold tracking-wide text-gray-800 uppercase">
-                LandRegi
+                ChainHouse
               </span>
             </Link>
             <ul className="flex items-center hidden space-x-8 lg:flex">

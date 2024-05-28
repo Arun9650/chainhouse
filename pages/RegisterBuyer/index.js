@@ -127,13 +127,13 @@ const Index = () => {
   })
 
 
-  console.log("🚀 ~ Index ~ BuyerData:", BuyerData)
+
   
-  function isAddressInBuyerData(address, buyerData) {
+  const isAddressInBuyerData = (address, buyerData) => {
     // Check if buyerData is not null or undefined
     if (buyerData) {
       // Check if the address exists in buyerData
-      return buyerData.some(buyer => buyer.address === address);
+      return buyerData.includes(address);
     }
     // If buyerData is null or undefined, return false
     return false;
@@ -148,6 +148,9 @@ const Index = () => {
     aadharCardImage,
     email
   }) => {
+   
+  
+    console.log(username, age, aadharCardNo, panCardNo, ownedLands, SellerData.AadharCardImage, email);
 
    
     if(BuyerData){
@@ -158,9 +161,6 @@ const Index = () => {
       return;
     }
 
-
-
-    console.log("handleSubmit1");
      
       try {
         const { request } = await prepareWriteContract({
@@ -173,14 +173,14 @@ const Index = () => {
             aadharCardNo,
             panCardNo,
             ownedLands,
-            aadharCardImage,
+            SellerData.AadharCardImage,
             email,
           ],
         });
 
         const {hash} = await writeContract(request);
 
-        const txWait = await waitForTransaction({
+        const txWait =  waitForTransaction({
           hash: hash,
         });
      
@@ -195,9 +195,15 @@ const Index = () => {
         if (result.status == 'success') {
           router.push("/Dashboard");
         }
-      } catch (e) {
-        console.log(e);
-        toast.error('Something went wrong');
+      } catch (error) {
+        console.log(error);
+        if (error.shortMessage) {
+          const match = error.shortMessage.match(/reason:\n\s*(.*)/);
+          toast.error(match[1].trim());
+        } 
+        else {
+          toast.error(error.shortMessage);
+        }
       }    
   };
 
@@ -205,18 +211,38 @@ const Index = () => {
     address: ContractAddress,
     functionName: "getBuyer",
     abi: abi,
-    args: [address],
+    // args: [address],
   });
 
 
 
+  const {data : isBuyer} = useContractRead({
+    address: ContractAddress,
+    functionName: "isBuyer",
+    abi: abi,
+    args: [address],
+  })
+
+
+  useEffect(() => {
+    if(isBuyer){
+      router.push('/Dashboard');
+    }
+  },[isBuyer])
+
   useEffect(() => {
     if (getBuyer) {
-      if(getBuyer.address == address){
-        router.push("/Dashboard");
+      if(BuyerData){
+        
+      const isAddressInBuyer =  isAddressInBuyerData(address, BuyerData);
+        console.log("🚀 ~ useEffect ~ isAddressInBuyer:", isAddressInBuyer)
+        if(isAddressInBuyer){
+          toast.error('User already registered');
+        router.push('/Dashboard');
+        }
       }
     }
-  }, [getBuyer]);
+  }, [getBuyer, address, BuyerData, router]);
 
   return (
     <div className="min-h-screen flex flex-col h-screen ">
