@@ -71,8 +71,11 @@ export default function Home() {
   
 
   useEffect(() => {
+    if(address){
+      
     if (isLandInspector.data === address) {
       router.push("/LandInspectorDashboard");
+    }
     }
   }, [address, isLandInspector, router]);
 
