@@ -15,12 +15,14 @@ const BuyerProfile = () => {
         abi: abi
         })
 
-    const isVerified = useContractRead({
+    const {data : isVerified} = useContractRead({
         address: ContractAddress,
-        functionName: "isVerified",
+        functionName: "isBuyer",
         args: [address],
         abi: abi
     })
+
+    console.log(isVerified);
 
         if(!data.data){
             return (
@@ -38,9 +40,9 @@ const BuyerProfile = () => {
           <h1>Buyer Profile</h1>
           <div>
             <h2 >Verified :
-              <span className={ `font-bold uppercase mx-2 ${isVerified?.data  ? "text-green-600": "text-red-600" }`}>
+              <span className={ `font-bold uppercase mx-2 ${isVerified  ? "text-green-600": "text-red-600" }`}>
                 
-               {(isVerified?.data).toString()}
+               {(isVerified).toString()}
               </span>
                </h2>
             <h2>Name: {data.data?.[0]}</h2>

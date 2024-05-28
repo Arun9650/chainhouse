@@ -10,8 +10,8 @@ const OwnedLand = () => {
     const LandOwner = useContractRead({
         address: ContractAddress,
         abi: abi,
-        functionName: "getLandOwner",
-        args:[1]
+        functionName: "landOwner",
+        args:[0]
     })
 
     const Area = useContractRead({
@@ -57,6 +57,7 @@ const OwnedLand = () => {
     })
 
 
+    console.log(LandOwner.data);
 
   return (
     <Layout>

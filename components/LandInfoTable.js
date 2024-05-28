@@ -4,22 +4,44 @@ import { ContractAddress } from "../constants/ContractAddress";
 import { abi } from "../constants/ABIcontract";
 import { useRouter } from "next/router";
 import { RoleContext } from "../context/RoleContext";
-import { prepareWriteContract, writeContract, readContract } from "@wagmi/core";
-import { getAddress } from "viem";
+import { prepareWriteContract, writeContract, readContract, waitForTransaction } from "@wagmi/core";
+import toast from "react-hot-toast";
 
 const LandInfoTable = () => {
+  
   const { role } = useContext(RoleContext);
 
   const [landsData, setLandsData] = useState([]);
+  console.log("🚀 ~ LandInfoTable ~ landsData:", landsData)
+  const [loading, setLoading] = useState(new Array(landsData.length).fill(false));
+  
 
   const router = useRouter();
 
   const data = useContractRead({
     address: ContractAddress,
     abi: abi,
-    functionName: "getLandsCount",
+    functionName: "getLandCount",
   });
-  console.log(Number(data.data));
+
+
+  const {data : isLandRequestedMapping} = useContractRead({
+    address: ContractAddress,
+    abi: abi,
+    functionName: "isLandRequestedMapping",
+    args: [1],
+  })
+
+
+
+  const {data : seller} = useContractRead({
+    address: ContractAddress,
+    abi: abi,
+    functionName: "getSellers",
+  })
+
+
+
 
   useEffect(() => {
     if (data.data) {
@@ -37,74 +59,50 @@ const LandInfoTable = () => {
         );
 
         const landsData = await Promise.all(landPromises);
-        setLandsData(landsData);
+  
+
+
+        const isLandRequested = dynamicArray.map((index) => 
+          readContract({
+            address: ContractAddress,
+            abi: abi,
+            functionName: "isLandRequestedMapping",
+            args: [index],
+          })
+  
+        )
+
+        
+        const isLandRequestedArray = await Promise.all(isLandRequested);
+        
+        console.log(landsData)
+        console.log(isLandRequestedArray)
+
+        const combinedData = landsData.map((item, index) => {
+          return {...item, isRequested: isLandRequestedArray[index]};
+        });
+        
+        console.log(combinedData);
+
+        setLandsData(combinedData);
       };
 
       fetchLandInfo();
     }
   }, [data.data]);
 
-  console.log(landsData);
-
-  const lands = useContractRead({
-    address: ContractAddress,
-    abi: abi,
-    functionName: "lands",
-    args: [1],
-  });
-
-  console.log(lands.data);
-
-  const state = useContractRead({
-    address: ContractAddress,
-    functionName: "getState",
-    args: [1],
-    abi: abi,
-  });
-
-  const Area = useContractRead({
-    address: ContractAddress,
-    functionName: "getArea",
-    args: [1],
-    abi: abi,
-  });
-
-  const City = useContractRead({
-    address: ContractAddress,
-    functionName: "getCity",
-    args: [1],
-    abi: abi,
-  });
-
-  const Price = useContractRead({
-    address: ContractAddress,
-    functionName: "getPrice",
-    args: [1],
-    abi: abi,
-  });
-
-  const PID = useContractRead({
-    address: ContractAddress,
-    functionName: "getPID",
-    args: [1],
-    abi: abi,
-  });
-
-  const SurveyNumber = useContractRead({
-    address: ContractAddress,
-    functionName: "getSurveyNumber",
-    args: [1],
-    abi: abi,
-  });
-
-  const sellerId = useContractRead({
-    address: ContractAddress,
-    functionName: "getSeller",
-    abi: abi,
-  });
+  // console.log(landsData);
 
 
-  const requestLand = async (index) => {
+
+
+  const requestLand = async (land, index) => {
+    console.log("🚀 ~ requestLand ~ land:", land)
+    setLoading(prevLoading => {
+      const newLoading = [...prevLoading];
+      newLoading[index] = true;
+      return newLoading;
+    });
     console.log("🚀 ~ requestLand ~ index:", index)
     try {
     
@@ -112,19 +110,49 @@ const LandInfoTable = () => {
       address: ContractAddress,
       abi: abi,
       functionName: "requestLand",
-      args: ['0x754aCB4D766809c791d5A71bDCb589F5951dC873', 1],
+      args: [seller[0], Number(land)],
     });
 
-    const { hash } = await writeContract(request);  
+    const { hash } = await writeContract(request);
+
+    
+    const txhash = waitForTransaction({hash: hash});
+
+    console.log(txhash);
+
+    toast.promise(txhash, {
+      loading: "Waiting for transaction to complete",
+      success: "Transaction completed successfully",
+      error: "Transaction failed",
+    })
+
+    setLoading(prevLoading => {
+      const newLoading = [...prevLoading];
+      newLoading[index] = false;
+      return newLoading;
+    });
+
   } catch (error) {
+
+    setLoading(prevLoading => {
+      const newLoading = [...prevLoading];
+      newLoading[index] = false;
+      return newLoading;
+    });
+    if(error.shortMessage === 'User rejected the request.'){
+      toast.error('Transaction rejected by user');
+    }
+    else {
+      toast.error(error.shortMessage);
+    }
     console.log(error);
   }
   };
 
-  if (!state.data) {
+  if (!landsData) {
     return (
       <div>
-        <h1>Loading</h1>
+        <h1>Loading...</h1>
       </div>
     );
   }
@@ -149,7 +177,10 @@ const LandInfoTable = () => {
             )}
           </thead>
           <tbody>
-            {landsData.map((land, index) => (
+           
+            {!landsData && <td>Loading...</td>}
+            {landsData.length === 0 && <td>No records</td>}
+            {landsData.length > 0 &&  landsData.map((land, index) => (
               <tr key={index}>
                 <td>{land[0].toString()}</td>
                 <td>{land[1].toString()}</td>
@@ -162,10 +193,14 @@ const LandInfoTable = () => {
                   <>
                     <td>
                       <button
-                        onClick={() => requestLand(land[0])}
-                        className="bg-blue-600 w-32 px-3 py-3 text-white rounded-xl"
+                        onClick={() => requestLand(land[0], index)}
+                        className={` ${  land.isRequested ?  "bg-yellow-500" : "bg-blue-500"}  w-32 px-3 py-3 text-white rounded-xl`}
                       >
-                        Request Land
+                        {land.isRequested ? "Requested" : (
+                          <div>
+                           {loading[index] ? "Loading..." : "Request Land"}
+                          </div>
+                        )}
                       </button>
                     </td>
                   </>
@@ -173,8 +208,8 @@ const LandInfoTable = () => {
               </tr>
             ))}
 
-            {/* </tr> */}
           </tbody>
+          
         </table>
       </div>
       <div className="flex flex-col gap-6 mt-10 border w-60 rounded-lg p-3 bg-slate-50">

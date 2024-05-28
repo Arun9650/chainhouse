@@ -39,10 +39,9 @@ export default function Home() {
   const isLandInspector = useContractRead({
     abi: abi,
     address: ContractAddress,
-    functionName: "isLandInspector",
-    args: [address],
+    functionName: "landInspector",
+    // args: [address],
   });
-
  
   const clickRadio1  = (e) => {
     e.preventDefault();
@@ -72,41 +71,13 @@ export default function Home() {
   
 
   useEffect(() => {
-    if (isLandInspector.data) {
+    if (isLandInspector.data === address) {
       router.push("/LandInspectorDashboard");
     }
   }, [address, isLandInspector, router]);
 
 
-  // const unwatch = watchAccount( () => {
-
-  //   console.log('account changed')
-
-  // })
   
-
-
-  //  useEffect(() => {
-  //     unwatch()
-  //  },[address, unwatch])
-
-  
-  // useEffect(() => {
-  //   if (window !== undefined) {
-  //     if (!isConnected ) {
-  //       return (
-  //         <div className="flex min-h-screen flex-col items-center justify-between p-24">
-  //           <ConnectButton />
-  //         </div>
-  //       );
-  //     }
-
-  //     if (data.data) {
-  //       router.push("/LandInspectorDashboard");
-  //     }
-  //   }
-  // },[]);
-
 
 
 

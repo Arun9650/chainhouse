@@ -1,10 +1,10 @@
-import React, {useState, useEffect} from 'react'
-import Layout from '../../components/layout'
-import Image from 'next/image'
-import { useContractRead } from 'wagmi';
-import { ContractAddress } from '../../constants/ContractAddress';
-import { abi } from '../../constants/ABIcontract';
-import { readContract } from '@wagmi/core';
+import React, { useState, useEffect } from "react";
+import Layout from "../../components/layout";
+import Image from "next/image";
+import { useContractRead } from "wagmi";
+import { ContractAddress } from "../../constants/ContractAddress";
+import { abi } from "../../constants/ABIcontract";
+import { readContract } from "@wagmi/core";
 
 const Index = () => {
   const [mounted, setMounted] = useState(false);
@@ -17,9 +17,8 @@ const Index = () => {
   const data = useContractRead({
     address: ContractAddress,
     abi: abi,
-    functionName: "getLandsCount",
+    functionName: "getLandCount",
   });
-
 
   useEffect(() => {
     if (data.data) {
@@ -44,15 +43,21 @@ const Index = () => {
     }
   }, [data.data]);
 
-  console.log(landsData);
-
-
   return (
     <Layout>
-      <div className="border flex gap-8 rounded-xl ">
+      <div className=" flex gap-8 rounded-xl ">
+        {landsData && (
+          <div className=" flex gap-8 rounded-xl ">
+            {landsData.length === 0 && (
+              <div>
+                <h1>No data found</h1>
+              </div>
+            )}
+          </div>
+        )}
+
         {landsData.map((land, index) => (
           <div key={index}>
-            
             <Image
               src={`https://copper-rear-chickadee-886.mypinata.cloud/ipfs/${land[7]}`}
               alt="alt"
@@ -60,7 +65,10 @@ const Index = () => {
               height={300}
               className="rounded-xl"
               // fallbackSrc="/images/placeholder.jpeg"
-              onError={(e) => { e.target.onerror = null; e.target.src="/images/placeholder.jpeg"; }}
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = "/images/placeholder.jpeg";
+              }}
             />
             <div>
               {mounted && (
@@ -83,4 +91,4 @@ const Index = () => {
   );
 };
 
-export default Index
+export default Index;

@@ -1,14 +1,99 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import Layout from '../../components/LayoutLandInspector'
 import { useContractRead } from 'wagmi'
 import { ContractAddress } from '../../constants/ContractAddress'
 import { abi } from '../../constants/ABIcontract'
 import Link from 'next/link'
-import { prepareWriteContract, writeContract } from '@wagmi/core'
+import { prepareWriteContract, writeContract, readContract , waitForTransaction} from '@wagmi/core'
 import toast from 'react-hot-toast'
 import { shortenAddress } from '../../utils'
 
 const VerifyLand = () => {
+
+
+    const [landsData, setLandsData] = useState([]);
+  const [loading, setLoading] = useState(new Array(landsData.length).fill(false));
+
+
+  console.log(landsData)
+
+    const data = useContractRead({
+        address: ContractAddress,
+        abi: abi,
+        functionName: "getLandCount",
+      });
+    
+      const {data : seller} = useContractRead({
+        address: ContractAddress,
+        abi: abi,
+        functionName: "getSellers",
+      })
+    
+    
+      useEffect(() => {
+        if (data.data) {
+          const arrayLength = Number(data.data);
+          const dynamicArray = Array.from({ length: arrayLength }, (v, i) => i + 1);
+    
+          const fetchLandInfo = async () => {
+            const landPromises = dynamicArray.map((index) =>
+              readContract({
+                address: ContractAddress,
+                abi: abi,
+                functionName: "lands",
+                args: [index],
+              })
+            );
+    
+            const landsData = await Promise.all(landPromises);
+      
+    
+    
+            const isLandRequested = dynamicArray.map((index) => 
+              readContract({
+                address: ContractAddress,
+                abi: abi,
+                functionName: "isLandRequestedMapping",
+                args: [index],
+              })
+      
+            )
+    
+            
+            const isLandRequestedArray = await Promise.all(isLandRequested);
+
+
+            const Owner = dynamicArray.map((index) => 
+              readContract({
+                address: ContractAddress,
+                abi: abi,
+                functionName: "landOwner",
+                args: [index],
+              })
+      
+            )
+    
+            
+            const OwnerArray = await Promise.all(Owner);
+            console.log("🚀 ~ fetchLandInfo ~ OwnerArray:", OwnerArray)
+            
+            console.log(landsData)
+            console.log(isLandRequestedArray)
+    
+            const combinedData = landsData.map((item, index) => {
+              return {...item, isRequested: isLandRequestedArray[index], Owner: OwnerArray[index]};
+            });
+            
+            console.log(combinedData);
+    
+            setLandsData(combinedData);
+          };
+    
+          fetchLandInfo();
+        }
+      }, [data.data]);
+    
+
 
 
     const Area = useContractRead({
@@ -18,6 +103,24 @@ const VerifyLand = () => {
         args: [1],
     })
 
+
+
+    const {data : requests} = useContractRead({
+        address: ContractAddress,
+        abi: abi,
+        functionName: "requests",
+        args: [1],
+    })
+
+    console.log(requests);
+    const {data : requestCount} = useContractRead({
+        address: ContractAddress,
+        abi: abi,
+        functionName: "requestCount",
+    })
+
+
+    console.log(requestCount);
 
     const City = useContractRead({
         address: ContractAddress,
@@ -79,18 +182,45 @@ const VerifyLand = () => {
     })
 
 
-    const verify = async () => {
+    const verify = async (land,index) => {
+       console.log("🚀 ~ verify ~ land:", land)
        try {
+        setLoading(prevLoading => {
+            const newLoading = [...prevLoading];
+            newLoading[index] = true;
+            return newLoading;
+          });
+
         const {request} = await prepareWriteContract({
             address: ContractAddress,
             abi: abi,
             functionName: "verifyLand",
-            args: [1],
+            args: [land],
         })
 
-        await writeContract(request);
+      const hash  =   await writeContract(request);
+
+      const txhash  = waitForTransaction({hash: hash});
+
+      toast.promise(txhash, {
+        loading: "Waiting for transaction to complete",
+        success: "Transaction completed successfully",
+        error: "Transaction failed",
+      });
+
+
+        setLoading(prevLoading => {
+            const newLoading = [...prevLoading];
+            newLoading[index] = false;
+            return newLoading;
+          });
 
        } catch (error) {
+        setLoading(prevLoading => {
+            const newLoading = [...prevLoading];
+            newLoading[index] = false;
+            return newLoading;
+          });
             toast.error(error.shortMessage);
             console.log(error);
        }    
@@ -107,12 +237,6 @@ const VerifyLand = () => {
 
     console.log('alreadyVerified',alreadyVerified.data)
 
-
-    if(alreadyVerified.error){
-        console.log(error);
-        toast.error(error.message);
-        return;
-    }
 
     if(alreadyVerified.data){
         return (
@@ -142,19 +266,22 @@ const VerifyLand = () => {
                 <th>Verify</th>
             </thead>
             <tbody>
-                <tr>
-                    <td>1</td>
-                    <td>{(Area?.data)?.toString()}</td>
-                    <td>{(City?.data)?.toString()}</td>
-                    <td>{(State?.data)?.toString()}</td>
-                    <td>{(Price?.data)?.toString()}</td>
-                    <td>{(PID?.data)?.toString()}</td>
-                    <td>{(SurveyNumber?.data)?.toString()}</td>
-                    <td >{shortenAddress((OwnerID?.data)?.toString())}</td>
-                    <td><Link className='text-sky-400' target='_blank' href={`https://ipfs.io/ipfs/${LandImage.data}`}>Click hare</Link></td>
-                    <td><Link className='text-sky-400' target='_blank' href={`https://ipfs.io/ipfs/${Document.data}`}>Click hare</Link></td>
-                    <button onClick={() => verify()} className='bg-blue-600 p-4 py-3 rounded-xl text-white'>Verify It</button>
-                </tr>
+            {landsData.map((land, index) => (
+      <tr key={index}>
+        <td>{Number(land[0])}</td>
+        <td>{Number(land[1])}</td>
+        <td>{land[2]}</td>
+        <td>{land[3]}</td>
+        <td>{(Number(land[4]))}</td>
+        <td>{Number(land[5])}</td>
+        <td>{Number(land[6])}</td>
+        <td>{shortenAddress(land.Owner)}</td>
+        <td><Link className='text-sky-400' target='_blank' href={`https://ipfs.io/ipfs/${land[7]}`}>Click Here</Link></td>
+        <td><Link className='text-sky-400' target='_blank' href={`https://ipfs.io/ipfs/${land[8]}`}>Click Here</Link></td>
+        <td><button onClick={() => verify(land[0], index)} className='bg-blue-600 p-4 py-3 rounded-xl text-white'>
+        {loading[index] ? "Loading..." : "Verify  it "}</button></td>
+      </tr>
+    ))}
             </tbody>
         </table>
        </Layout>

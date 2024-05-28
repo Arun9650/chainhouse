@@ -1,46 +1,38 @@
 import Header from "../../components/Header";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
+import { useAccount, useContractRead } from "wagmi";
+import { prepareWriteContract, writeContract, waitForTransaction } from "@wagmi/core";
+import { ContractAddress } from "../../constants/ContractAddress";
+import { abi } from "../../constants/ABIcontract";
+import toast from "react-hot-toast";
+import { Button } from "../../components/components/ui/button";
 import {
+  Form,
   FormField,
   FormItem,
   FormLabel,
   FormControl,
   FormMessage,
-} from "/components/components/ui/form.jsx";
-import { Input } from "/components/components/ui/input.jsx";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Form } from "../../components/components/ui/form";
-import * as z from "zod";
-import { useForm } from "react-hook-form";
-import { Button } from "../../components/components/ui/button";
-import { useEffect, useState } from "react";
-import { prepareWriteContract, writeContract, waitForTransaction , readContract} from "@wagmi/core";
-import { ContractAddress } from "../../constants/ContractAddress";
-import { abi } from "../../constants/ABIcontract";
-import toast from "react-hot-toast";
-import { useRouter , } from "next/navigation";
-import { useAccount, useContractRead } from "wagmi";
+} from "../../components/components/ui/form";
+import { Input } from "../../components/components/ui/input";
 
 const formSchema = z.object({
-  username: z.string().min(2, {
-    message: "Username must be at least 2 characters.",
-  }),
-  age: z.number().positive({
-    message: "Age must be a positive number.",
-  }),
-  aadharCardNo: z.string().min(12, {
-    message: "Aadhar Card No. must be at least 12 characters.",
-  }),
-  panCardNo: z.string().min(10, {
-    message: "Pan Card No. must be at least 10 characters.",
-  }),
+  username: z.string().min(2, { message: "Username must be at least 2 characters." }),
+  age: z.number().positive({ message: "Age must be a positive number." }),
+  aadharCardNo: z.string().min(12, { message: "Aadhar Card No. must be at least 12 characters." }),
+  panCardNo: z.string().min(10, { message: "Pan Card No. must be at least 10 characters." }),
   ownedLands: z.string(),
-  aadharCardImage: z.string()
+  aadharCardImage: z.string(),
 });
 
 const RegisterSeller = () => {
   const [uploading, setUploading] = useState(false);
   const router = useRouter();
-  const {address} = useAccount();
+  const { address } = useAccount();
 
   const form = useForm({
     resolver: zodResolver(formSchema),
@@ -80,83 +72,82 @@ const RegisterSeller = () => {
     console.log(e.target.files[0]);
   };
 
-  // console.log(form.getValues().age);
-
-
   const { data, isError, isLoading } = useContractRead({
     address: ContractAddress,
     abi: abi,
     functionName: 'getSeller',
+  });
+
+  console.log(ContractAddress);
+
+  const {data: isSeller} = useContractRead({
+    address: ContractAddress,
+    abi: abi,
+    functionName: 'isSeller',
+    args: [address],
   })
 
-  useEffect(() => {
-   if(data){
-    if(data[0] == address ){
-      router.push('/Dashboard');
-      
+  const {data: sellerList} = useContractRead({
+    address: ContractAddress,
+    abi: abi,
+    functionName: 'sellerList',
+    // args: [address],
+  })
+  console.log(sellerList);
+
+  console.log("🚀isSeller:", isSeller)
+
+    useEffect(() => {
+      if (isSeller) {
+          router.push('/Dashboard');
+      }
+    }, [isSeller]);
+
+  const onSubmit = async (values) => {
+    const { username, age, aadharCardNo, panCardNo, ownedLands, aadharCardImage } = values;
+    console.log("🚀 ~ onSubmit ~  username, age, aadharCardNo, panCardNo, ownedLands, aadharCardImage:",  username, age, aadharCardNo, panCardNo, ownedLands, aadharCardImage)
+
+    try {
+      const { request } = await prepareWriteContract({
+        address: ContractAddress,
+        abi: abi,
+        functionName: "registerSeller",
+        args: [username, age, aadharCardNo, panCardNo, ownedLands, aadharCardImage],
+      });
+
+      const { hash } = await writeContract(request);
+
+      const txWait = waitForTransaction({ hash });
+
+      const result = await toast.promise(txWait, {
+        loading: "Waiting for transaction to complete",
+        success: "Transaction completed successfully",
+        error: "Transaction failed",
+      });
+
+      if (result.status === 'success') {
+        router.push('/Dashboard');
+      }
+    } catch (error) {
+      console.log("🚀 ~ onSubmit ~ error:", error)
+      if (error.shortMessage) {
+        const match = error.shortMessage.match(/reason:\n\s*(.*)/);
+        toast.error(match[1].trim());
+      } 
+      else {
+        toast.error(error.shortMessage);
+      }
     }
-   }
-
-  },[data])
-
-
-  const onSubmit = async ({
-    username,
-    age,
-    aadharCardNo,
-    panCardNo,
-    ownedLands,
-    aadharCardImage,
-  }) => {
-
-
-
-   try {
-    const { request } = await prepareWriteContract({
-      address: ContractAddress,
-      abi: abi,
-      functionName: "registerSeller",
-      args: [
-        username,
-        age,
-        aadharCardNo,
-        panCardNo,
-        ownedLands,
-        aadharCardImage,
-      ],
-    });
-
-
-
-    const { hash } = await writeContract(request);
-
-    const txWait = waitForTransaction({
-      hash: hash,
-    });
-
-    const result = await toast.promise(txWait, {
-      loading: "Waiting for transaction to complete",
-      success: "Transaction completed successfully",
-      error: "Transaction failed",
-    });
-
-    if(result.status == 'success'){
-      router.push('/Dashboard');
-    }
- 
-   } catch (error) {
-      console.log(error);
-   }
   };
 
   return (
-    <div className="min-h-screen flex flex-col h-screen ">
+    <div className="min-h-screen flex flex-col h-screen">
       <Header />
 
-      <section className="bg-white flex flex-grow h-full   dark:bg-gray-900 ">
-        <div className=" flex-grow h-full">
-          <div className="flex justify-center   flex-grow h-full    ">
-            <div className="hidden bg-cover lg:block lg:w-2/5 bg-[url(/register-image.png)] "></div>
+      <section className="bg-white flex flex-grow h-full dark:bg-gray-900">
+        <div className="flex-grow h-full">
+          <div className="flex justify-center flex-grow h-full">
+            <div className="hidden bg-cover lg:block lg:w-2/5 bg-[url(/register-image.png)]"></div>
 
             <div className="flex items-center w-full max-w-3xl pt-0 p-8 mx-auto lg:px-12 lg:w-3/5">
               <div className="w-full">
@@ -170,10 +161,7 @@ const RegisterSeller = () => {
                 </p>
 
                 <Form {...form}>
-                  <form
-                    onSubmit={form.handleSubmit(onSubmit)}
-                    className=" grid grid-cols-1 gap-6 mt-8 md:grid-cols-2"
-                  >
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 gap-6 mt-8 md:grid-cols-2">
                     <FormField
                       control={form.control}
                       name="username"
@@ -243,12 +231,9 @@ const RegisterSeller = () => {
                       name="ownedLands"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>owned Land</FormLabel>
+                          <FormLabel>Owned Land</FormLabel>
                           <FormControl>
-                            <Input
-                              type="text"
-                              {...field}
-                            />
+                            <Input type="text" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -260,7 +245,7 @@ const RegisterSeller = () => {
                         name="aadharCardImage"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>AadharCardImage</FormLabel>
+                            <FormLabel>Aadhar Card Image</FormLabel>
                             <FormControl>
                               <input
                                 type="file"
@@ -275,7 +260,7 @@ const RegisterSeller = () => {
                       {uploading && (
                         <span className="pl-2 text-yellow-500">
                           {" "}
-                          Please wait file is uploading...{" "}
+                          Please wait, file is uploading...{" "}
                         </span>
                       )}
                     </div>
